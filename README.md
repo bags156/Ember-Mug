@@ -32,16 +32,13 @@ Until that reconnection happens, the mug keeps maintaining its last target on it
 
 ## Install
 
-**Releases (recommended).** Each tagged version is published under **Releases** with a signed `Ember-Mug-vX.Y.Z.apk`. Every release is signed with the same key, so a new version installs over the old one. In [Obtainium](https://github.com/ImranR98/Obtainium), add `https://github.com/bags156/Ember-Mug` as the app source to get updates.
+**Releases (recommended).** Each tagged version is published under **Releases** with a signed `Ember-Mug-vX.Y.Z.apk`. In [Obtainium](https://github.com/ImranR98/Obtainium), add `https://github.com/bags156/Ember-Mug` as the app source to get updates.
 
-**Debug builds.** For testing a change before it is released:
+**Debug builds.** For testing a change before it is released: open **Actions → Build Android APK**, open a successful run, download the **Ember-Mug-debug** artifact (GitHub sign-in may be required), unzip it and install `app-debug.apk`.
 
-1. Open the repository's **Actions → Build Android APK** workflow.
-2. Open a successful run and download the **Ember-Mug-debug** artifact (GitHub sign-in may be required).
-3. Unzip it, copy `app-debug.apk` to the phone and open it. Allow installation from that source if Android asks.
-4. Debug builds are signed with a throwaway key that can differ between runs and never matches the release key. Switching between a debug build and a release, or between debug builds with a signature mismatch, means uninstalling first (this erases the app's settings).
+**Signing.** Every build, release or debug, is signed with the same key, so any build installs over any other. That key is public and committed in `signing/`; there are no secrets. See `signing/README.md` for what that means. Builds made before this key existed must be uninstalled once (this erases the app's settings).
 
-**Publishing a release.** Push a tag such as `v0.2.0`; the **Release APK** workflow builds, signs and publishes it, taking the version from the tag. The signing key lives only in the repository secrets `SIGNING_KEYSTORE_B64` and `SIGNING_STORE_PASSWORD`. No signing keys belong in this repository.
+**Publishing a release.** Push a tag such as `v0.2.0`; the **Release APK** workflow builds, signs and publishes it, taking the version from the tag.
 
 ## Connect
 

@@ -3,9 +3,8 @@ plugins {
 }
 
 // Release builds are made by .github/workflows/release.yml, which passes the version from the
-// git tag and the signing key from repository secrets. Nothing secret lives in this repository.
+// git tag.
 val releaseVersion: String? = System.getenv("RELEASE_VERSION")?.takeIf { it.isNotBlank() }
-val signingKeystore: String? = System.getenv("SIGNING_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
 
 /** "1.2.3" -> 10203, so a newer tag always installs over an older one. */
 fun versionCodeOf(version: String): Int {
@@ -26,23 +25,26 @@ android {
         versionName = releaseVersion ?: "0.1.0"
     }
 
+    // The signing key is deliberately public and committed (signing/README.md explains the
+    // trade-off). Every build, debug or release, from any machine, is signed the same way, so any
+    // build installs over any other.
     signingConfigs {
-        if (signingKeystore != null) {
-            create("release") {
-                storeFile = file(signingKeystore)
-                storeType = "pkcs12"
-                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
-                keyAlias = "embermug"
-                keyPassword = System.getenv("SIGNING_STORE_PASSWORD")
-            }
+        create("open") {
+            storeFile = rootProject.file("signing/public-release.p12")
+            storeType = "pkcs12"
+            storePassword = "android"
+            keyAlias = "embermug"
+            keyPassword = "android"
         }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("open")
+        }
         release {
             isMinifyEnabled = false
-            // Without the key (any build outside the release workflow) the release APK is unsigned.
-            signingConfig = signingConfigs.findByName("release")
+            signingConfig = signingConfigs.getByName("open")
         }
     }
 
