@@ -51,8 +51,20 @@ final class Notifications {
         return context.getSystemService(NotificationManager.class).areNotificationsEnabled();
     }
 
-    static Notification service(Context context, MugState state, TempUnit unit) {
-        String title = (state.name != null ? state.name : "Ember Mug") + " · " + state.link.label;
+    private static String serviceTitle(MugState state) {
+        return (state.name != null ? state.name : "Ember Mug") + " · " + state.link.label;
+    }
+
+    private static boolean showsHeaterOff(MugState state) {
+        return state.isReady() && state.heaterMaybeOn();
+    }
+
+    /** Everything the ongoing notification displays, for skipping updates that change nothing. */
+    static String serviceContent(MugState state, TempUnit unit) {
+        return serviceTitle(state) + '\n' + serviceText(state, unit) + '\n' + showsHeaterOff(state);
+    }
+
+    private static String serviceText(MugState state, TempUnit unit) {
         StringBuilder text = new StringBuilder();
         if (state.currentCenti != null) {
             text.append("Drink ").append(Temperatures.format(state.currentCenti, unit));
@@ -68,6 +80,12 @@ final class Notifications {
         if (text.length() == 0) {
             text.append("Keeping your mug connected in the background.");
         }
+        return text.toString();
+    }
+
+    static Notification service(Context context, MugState state, TempUnit unit) {
+        String title = serviceTitle(state);
+        String text = serviceText(state, unit);
         Notification.Builder builder = new Notification.Builder(context, CHANNEL_STATUS)
                 .setSmallIcon(R.drawable.ic_stat_mug)
                 .setColor(ACCENT)
@@ -78,7 +96,7 @@ final class Notifications {
                 .setShowWhen(false)
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .setContentIntent(openApp(context));
-        if (state.isReady() && state.heaterMaybeOn()) {
+        if (showsHeaterOff(state)) {
             builder.addAction(action(context, "Heater off", EmberService.ACTION_HEATER_OFF, 11));
         }
         builder.addAction(action(context, "Disconnect", EmberService.ACTION_DISCONNECT, 12));

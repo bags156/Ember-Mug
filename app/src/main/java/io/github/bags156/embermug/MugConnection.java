@@ -99,6 +99,8 @@ final class MugConnection {
     private Op current;
     private boolean ready;
     private boolean closed;
+    /** Last link speed asked for; null until the first request. */
+    private Boolean lowPower;
 
     private final Runnable opTimeout = () -> {
         Log.w(TAG, "GATT operation timed out");
@@ -163,6 +165,25 @@ final class MugConnection {
 
     void enableNotifications(UUID characteristic, WriteCallback callback) {
         enqueue(new Op(KIND_NOTIFY, characteristic, null, null, callback));
+    }
+
+    /**
+     * Asks Android for a slow, battery-friendly link (true) or the normal one (false). The slow
+     * link lets both radios sleep longer between exchanges; commands take a little longer.
+     */
+    void setLowPower(boolean wanted) {
+        if (closed || !ready || gatt == null || (lowPower != null && lowPower == wanted)) {
+            return;
+        }
+        try {
+            if (gatt.requestConnectionPriority(wanted
+                    ? BluetoothGatt.CONNECTION_PRIORITY_LOW_POWER
+                    : BluetoothGatt.CONNECTION_PRIORITY_BALANCED)) {
+                lowPower = wanted;
+            }
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Could not change the connection priority", e);
+        }
     }
 
     /** Closes without notifying the listener. Queued operations are dropped. */

@@ -30,6 +30,7 @@ import io.github.bags156.embermug.core.LedColor;
 import io.github.bags156.embermug.core.LiquidState;
 import io.github.bags156.embermug.core.MugState;
 import io.github.bags156.embermug.core.PendingShutdown;
+import io.github.bags156.embermug.core.PollPolicy;
 import io.github.bags156.embermug.core.ReconnectBackoff;
 import io.github.bags156.embermug.core.ShutdownPolicy;
 import io.github.bags156.embermug.core.ShutdownStore;
@@ -56,9 +57,10 @@ public final class EmberService extends Service implements MugConnection.Listene
     static final String EXTRA_ADDRESS = "address";
     static final String EXTRA_NAME = "name";
 
-    static final long POLL_INTERVAL_MS = 12_000;
     private static final long STOP_TIMEOUT_MS = 8_000;
     private static final long NOTIFICATION_REFRESH_MS = 500;
+    /** Wait this long after the app leaves the screen before slowing the radio link down. */
+    private static final long LOW_POWER_DELAY_MS = 5_000;
     private static final int MAX_UNSUPPORTED_RETRIES = 3;
 
     /** Receives state on the main thread. */
@@ -91,6 +93,8 @@ public final class EmberService extends Service implements MugConnection.Listene
     private int lastStartId;
     private boolean receiverRegistered;
     private boolean notificationRefreshPending;
+    /** What the ongoing notification currently shows, so identical updates are not re-posted. */
+    private String shownNotification;
 
     private int offAttemptsThisConnection;
     private boolean heatInFlight;
@@ -102,11 +106,16 @@ public final class EmberService extends Service implements MugConnection.Listene
 
     private final Runnable poll = this::pollNow;
     private final Runnable reconnect = this::reconnectNow;
+    private final Runnable powerMode = this::applyPowerMode;
     private final Runnable notificationRefresh = () -> {
         notificationRefreshPending = false;
         if (foreground && !finished) {
-            getSystemService(NotificationManager.class)
-                    .notify(Notifications.ID_SERVICE, buildServiceNotification());
+            String content = Notifications.serviceContent(state, settings.unit());
+            if (!content.equals(shownNotification)) {
+                shownNotification = content;
+                getSystemService(NotificationManager.class)
+                        .notify(Notifications.ID_SERVICE, buildServiceNotification());
+            }
         }
     };
 
@@ -211,6 +220,7 @@ public final class EmberService extends Service implements MugConnection.Listene
         }
         try {
             Notification notification = buildServiceNotification();
+            shownNotification = Notifications.serviceContent(state, settings.unit());
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(Notifications.ID_SERVICE, notification,
                         ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
@@ -236,14 +246,47 @@ public final class EmberService extends Service implements MugConnection.Listene
             listener.onServiceStopping();
             return;
         }
+        boolean wasWatched = !listeners.isEmpty();
         if (!listeners.contains(listener)) {
             listeners.add(listener);
         }
         listener.onMugState(state.copy());
+        if (!wasWatched) {
+            onAppVisibilityChanged();
+        }
     }
 
     void removeListener(StateListener listener) {
-        listeners.remove(listener);
+        if (listeners.remove(listener) && listeners.isEmpty()) {
+            onAppVisibilityChanged();
+        }
+    }
+
+    /**
+     * The app came on screen or left it. On screen: refresh now, poll fast and use a responsive
+     * link. Off screen: rely on the mug's push events, poll rarely and let the radio idle.
+     */
+    private void onAppVisibilityChanged() {
+        boolean visible = !listeners.isEmpty();
+        main.removeCallbacks(powerMode);
+        if (connection == null || !state.isReady() || stopping) {
+            return;
+        }
+        if (visible) {
+            main.removeCallbacks(poll);
+            pollNow();
+            applyPowerMode();
+        } else {
+            schedulePoll();
+            main.postDelayed(powerMode, LOW_POWER_DELAY_MS);
+        }
+    }
+
+    private void applyPowerMode() {
+        MugConnection c = connection;
+        if (c != null && state.isReady()) {
+            c.setLowPower(listeners.isEmpty());
+        }
     }
 
     MugState currentState() {
@@ -270,7 +313,8 @@ public final class EmberService extends Service implements MugConnection.Listene
         long now = SystemClock.elapsedRealtime();
         HeatGate.Decision decision = HeatGate.check(c != null && isConnected(), isDeliveringShutdown(),
                 state.liquidState, state.liquidReadAtMs, now);
-        if (decision != HeatGate.Decision.ALLOWED) {
+        // A stale cached reading is not a reason to refuse: the fresh read below decides.
+        if (decision != HeatGate.Decision.ALLOWED && decision != HeatGate.Decision.STALE_READING) {
             setStatus(decision.message);
             return;
         }
@@ -535,6 +579,7 @@ public final class EmberService extends Service implements MugConnection.Listene
 
     private void resetLiveFlags() {
         main.removeCallbacks(poll);
+        main.removeCallbacks(powerMode);
         heatInFlight = false;
         offInFlight = false;
         ledInFlight = false;
@@ -625,6 +670,10 @@ public final class EmberService extends Service implements MugConnection.Listene
             if (c == connection) {
                 state.pushEventsActive = ok;
                 publish();
+                if (state.isReady()) {
+                    // Push events decide how rarely the background poll needs to run.
+                    schedulePoll();
+                }
             }
         });
         readTarget(c);
@@ -633,11 +682,12 @@ public final class EmberService extends Service implements MugConnection.Listene
         readBattery(c);
         readLed(c);
         schedulePoll();
+        applyPowerMode();
     }
 
     private void schedulePoll() {
         main.removeCallbacks(poll);
-        main.postDelayed(poll, POLL_INTERVAL_MS);
+        main.postDelayed(poll, PollPolicy.intervalMs(!listeners.isEmpty(), state.pushEventsActive));
     }
 
     private void pollNow() {
@@ -770,7 +820,7 @@ public final class EmberService extends Service implements MugConnection.Listene
     private void readCurrent(final MugConnection c) {
         c.read(EmberProtocol.CURRENT_TEMP, (ok, value) -> {
             Integer current = ok ? EmberProtocol.decodeTemperature(value) : null;
-            if (c == connection && current != null) {
+            if (c == connection && current != null && !current.equals(state.currentCenti)) {
                 state.currentCenti = current;
                 publish();
             }
@@ -789,7 +839,9 @@ public final class EmberService extends Service implements MugConnection.Listene
     private void readBattery(final MugConnection c) {
         c.read(EmberProtocol.BATTERY, (ok, value) -> {
             EmberProtocol.BatteryReading battery = ok ? EmberProtocol.decodeBattery(value) : null;
-            if (c == connection && battery != null) {
+            if (c == connection && battery != null
+                    && (!Integer.valueOf(battery.percent).equals(state.batteryPercent)
+                            || battery.charging != state.charging)) {
                 state.batteryPercent = battery.percent;
                 state.charging = battery.charging;
                 publish();
