@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notification icon: a mug with steam. Android uses only its alpha channel. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4,8h12v7a4,4 0 0,1 -4,4h-4a4,4 0 0,1 -4,-4z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M16,10h1.5a2.5,2.5 0 0,1 0,5H16v-1.6h1.5a0.9,0.9 0 0,0 0,-1.8H16z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M7,3h1.6v3.5H7zM11.4,3h1.6v3.5h-1.6z" />
+</vector>

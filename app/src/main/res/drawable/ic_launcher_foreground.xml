@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive icon foreground: the 24-unit mug scaled into the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="2.25"
+        android:scaleY="2.25"
+        android:translateX="27"
+        android:translateY="27">
+        <path
+            android:fillColor="#FFF4E9DD"
+            android:pathData="M4,8h12v7a4,4 0 0,1 -4,4h-4a4,4 0 0,1 -4,-4z" />
+        <path
+            android:fillColor="#FFF4E9DD"
+            android:pathData="M16,10h1.5a2.5,2.5 0 0,1 0,5H16v-1.6h1.5a0.9,0.9 0 0,0 0,-1.8H16z" />
+        <path
+            android:fillColor="#FFE8590C"
+            android:pathData="M7,3h1.6v3.5H7zM11.4,3h1.6v3.5h-1.6z" />
+    </group>
+</vector>
