@@ -38,7 +38,7 @@ Until that reconnection happens, the mug keeps maintaining its last target on it
 
 **Signing.** Every build, release or debug, is signed with the same key, so any build installs over any other. That key is public and committed in `signing/`; there are no secrets. See `signing/README.md` for what that means. Builds made before this key existed must be uninstalled once (this erases the app's settings).
 
-**Publishing a release.** Push a tag such as `v0.2.0`; the **Release APK** workflow builds, signs and publishes it, taking the version from the tag.
+**Publishing a release.** Change the number in `version.txt` (for example to `0.2.0`) and push. The **Release APK** workflow builds, signs and publishes `v0.2.0` with the APK attached. Pushes that leave the version unchanged do not publish anything.
 
 ## Connect
 

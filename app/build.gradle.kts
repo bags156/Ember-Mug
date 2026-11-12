@@ -2,9 +2,9 @@ plugins {
     id("com.android.application")
 }
 
-// Release builds are made by .github/workflows/release.yml, which passes the version from the
-// git tag.
-val releaseVersion: String? = System.getenv("RELEASE_VERSION")?.takeIf { it.isNotBlank() }
+// version.txt is the app's version. Changing it publishes a release
+// (.github/workflows/release.yml).
+val appVersion: String = rootProject.file("version.txt").readText().trim()
 
 /** "1.2.3" -> 10203, so a newer tag always installs over an older one. */
 fun versionCodeOf(version: String): Int {
@@ -21,8 +21,8 @@ android {
         applicationId = "io.github.bags156.embermug"
         minSdk = 26
         targetSdk = 36
-        versionCode = releaseVersion?.let { versionCodeOf(it) } ?: 1
-        versionName = releaseVersion ?: "0.1.0"
+        versionCode = versionCodeOf(appVersion)
+        versionName = appVersion
     }
 
     // The signing key is deliberately public and committed (signing/README.md explains the
