@@ -32,10 +32,16 @@ Until that reconnection happens, the mug keeps maintaining its last target on it
 
 ## Install
 
+**Releases (recommended).** Each tagged version is published under **Releases** with a signed `Ember-Mug-vX.Y.Z.apk`. Every release is signed with the same key, so a new version installs over the old one. In [Obtainium](https://github.com/ImranR98/Obtainium), add `https://github.com/bags156/Ember-Mug` as the app source to get updates.
+
+**Debug builds.** For testing a change before it is released:
+
 1. Open the repository's **Actions → Build Android APK** workflow.
 2. Open a successful run and download the **Ember-Mug-debug** artifact (GitHub sign-in may be required).
 3. Unzip it, copy `app-debug.apk` to the phone and open it. Allow installation from that source if Android asks.
-4. Debug builds are for personal testing. CI runners may produce different debug signing keys between runs; if an update reports a signature mismatch, uninstall the previous debug build first (this erases its settings). Use a consistent private signing key for ongoing releases. No signing keys belong in this repository.
+4. Debug builds are signed with a throwaway key that can differ between runs and never matches the release key. Switching between a debug build and a release, or between debug builds with a signature mismatch, means uninstalling first (this erases the app's settings).
+
+**Publishing a release.** Push a tag such as `v0.2.0`; the **Release APK** workflow builds, signs and publishes it, taking the version from the tag. The signing key lives only in the repository secrets `SIGNING_KEYSTORE_B64` and `SIGNING_STORE_PASSWORD`. No signing keys belong in this repository.
 
 ## Connect
 
