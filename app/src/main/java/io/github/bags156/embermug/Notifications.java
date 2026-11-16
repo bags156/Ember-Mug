@@ -72,7 +72,8 @@ final class Notifications {
         if (state.targetCenti != null) {
             appendDot(text).append(state.targetCenti == 0
                     ? "Heater off"
-                    : "Target " + Temperatures.format(state.targetCenti, unit));
+                    : "Target " + Temperatures.format(state.targetCenti, unit)
+                            + (state.forceHeat ? " (override)" : ""));
         }
         if (state.batteryPercent != null) {
             appendDot(text).append("Battery ").append(state.batteryPercent).append('%');

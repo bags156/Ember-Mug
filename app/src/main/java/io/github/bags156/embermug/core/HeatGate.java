@@ -30,6 +30,17 @@ public final class HeatGate {
     }
 
     /**
+     * The check for a forced heat request, which the user makes knowing the mug may report no
+     * liquid. Only the connection matters; a heater-off owed from a lost connection still goes first.
+     */
+    public static Decision checkForced(boolean connected, boolean shutdownPending) {
+        if (!connected) {
+            return Decision.NOT_READY;
+        }
+        return shutdownPending ? Decision.SHUTDOWN_PENDING : Decision.ALLOWED;
+    }
+
+    /**
      * @param connected true when the mug is connected and its services are set up
      * @param shutdownPending true while a heater-off request is being delivered on this connection
      * @param state latest liquid reading, or null if none

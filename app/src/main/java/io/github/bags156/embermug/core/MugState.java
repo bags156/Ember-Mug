@@ -34,6 +34,8 @@ public final class MugState {
     public boolean charging;
     public Integer ledRgb;
     public boolean pushEventsActive;
+    /** The user forced heat on: no liquid check, and no automatic off for an empty mug. */
+    public boolean forceHeat;
 
     public int reconnectFailures;
     /** Last command result, shown to the user. */
@@ -60,6 +62,7 @@ public final class MugState {
         c.charging = charging;
         c.ledRgb = ledRgb;
         c.pushEventsActive = pushEventsActive;
+        c.forceHeat = forceHeat;
         c.reconnectFailures = reconnectFailures;
         c.commandStatus = commandStatus;
         return c;

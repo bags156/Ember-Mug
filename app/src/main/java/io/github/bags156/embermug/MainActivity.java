@@ -108,6 +108,7 @@ public final class MainActivity extends Activity implements EmberService.StateLi
     private Button connectButton;
     private Button heatButton;
     private Button offButton;
+    private Button forceButton;
     private Button unitF;
     private Button unitC;
     private final Button[] favoriteButtons = new Button[Favorites.COUNT];
@@ -536,6 +537,23 @@ public final class MainActivity extends Activity implements EmberService.StateLi
         }
     }
 
+    private void confirmForceHeat() {
+        final int target = settings.selectedTarget();
+        new AlertDialog.Builder(this)
+                .setTitle("Force heat to " + Temperatures.format(target, settings.unit()) + "?")
+                .setMessage("This sends the temperature even if the mug reports no liquid, and stops this app "
+                        + "from turning the heater off when the mug is empty. It stays on until you tap Heater "
+                        + "off or disconnect. A dry mug can get hot.")
+                .setPositiveButton("Force heat", (d, w) -> {
+                    main.removeCallbacks(applySelection);
+                    if (service != null) {
+                        service.forceHeat(target);
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     private void onFavoriteTapped(int index) {
         int target = settings.favorites().get(index);
         settings.setSelectedTarget(target);
@@ -624,7 +642,8 @@ public final class MainActivity extends Activity implements EmberService.StateLi
         } else if (mug.targetCenti == 0) {
             targetText.setText("Heater off");
         } else {
-            targetText.setText("Target " + Temperatures.format(mug.targetCenti, unit));
+            targetText.setText("Target " + Temperatures.format(mug.targetCenti, unit)
+                    + (mug.forceHeat ? " · override on" : ""));
         }
         liquidText.setText(mug.liquidState == null
                 ? "Liquid: --"
@@ -645,6 +664,8 @@ public final class MainActivity extends Activity implements EmberService.StateLi
         selectedText.setText(Temperatures.format(settings.selectedTarget(), unit));
         heatButton.setEnabled(ready);
         offButton.setEnabled(ready);
+        forceButton.setEnabled(ready && !mug.forceHeat);
+        forceButton.setText(mug.forceHeat ? "Override on (Heater off ends it)" : "Force heat (ignore liquid sensor)");
         styleToggle(unitF, unit == TempUnit.FAHRENHEIT);
         styleToggle(unitC, unit == TempUnit.CELSIUS);
 
@@ -766,13 +787,16 @@ public final class MainActivity extends Activity implements EmberService.StateLi
             }
         });
         temp.addView(row(heatButton, offButton));
+        forceButton = button("Force heat (ignore liquid sensor)", v -> confirmForceHeat());
+        temp.addView(row(forceButton));
         commandText = text(14, false);
         commandText.setPadding(0, dp(6), 0, 0);
         temp.addView(commandText);
         TextView tempHelp = secondary(text(12, false));
-        tempHelp.setText("Heat now sends the selected target, even if the heater is off. The mug's firmware still "
-                + "decides when to heat: it won't heat an empty mug or liquid that's already hotter. While it's "
-                + "heating, changes here are sent automatically.");
+        tempHelp.setText("Heat now sends the selected target, even if the heater is off, once the mug reports "
+                + "liquid. Force heat skips that check and keeps this app from turning the heater off for an "
+                + "empty mug, until you tap Heater off or disconnect. The mug's firmware still has the final "
+                + "say on whether its heater runs. While it's heating, changes here are sent automatically.");
         tempHelp.setPadding(0, dp(6), 0, 0);
         temp.addView(tempHelp);
 

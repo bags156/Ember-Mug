@@ -308,6 +308,11 @@ public final class EmberService extends Service implements MugConnection.Listene
 
     /** Requests heat to {@code centi}. Checks liquid twice: cached, then a fresh read. */
     void heatNow(int centi) {
+        if (state.forceHeat) {
+            // The override is on: a new temperature keeps it on instead of being refused.
+            forceHeat(centi);
+            return;
+        }
         final int target = Temperatures.clampTarget(centi);
         final MugConnection c = connection;
         long now = SystemClock.elapsedRealtime();
@@ -368,6 +373,54 @@ public final class EmberService extends Service implements MugConnection.Listene
         });
     }
 
+    /**
+     * Override: sends {@code centi} whatever the liquid sensor says, and stops the app from
+     * turning the heater off for an empty mug. Lasts until heater off or the connection ends.
+     * The mug's firmware still has the final say on whether its heater runs.
+     */
+    void forceHeat(int centi) {
+        final int target = Temperatures.clampTarget(centi);
+        final MugConnection c = connection;
+        HeatGate.Decision decision = HeatGate.checkForced(c != null && isConnected(), isDeliveringShutdown());
+        if (decision != HeatGate.Decision.ALLOWED) {
+            setStatus(decision.message);
+            return;
+        }
+        if (heatInFlight) {
+            setStatus("Already sending a temperature to the mug…");
+            return;
+        }
+        heatInFlight = true;
+        // Set first, so an "empty" reading arriving during the write doesn't turn the heater off.
+        state.forceHeat = true;
+        if (settings.flag(AppSettings.OFF_ON_DISCONNECT)) {
+            shutdowns.arm(device.getAddress(), System.currentTimeMillis());
+        }
+        final String label = Temperatures.format(target, settings.unit());
+        setStatus("Override: sending " + label + "…");
+        c.write(EmberProtocol.TARGET_TEMP, EmberProtocol.encodeTemperature(target), written ->
+                c.read(EmberProtocol.TARGET_TEMP, (readOk, readValue) -> {
+                    if (c != connection) {
+                        return;
+                    }
+                    heatInFlight = false;
+                    Integer reported = readOk ? EmberProtocol.decodeTemperature(readValue) : null;
+                    if (reported != null) {
+                        onTarget(reported);
+                    }
+                    if (Temperatures.confirms(target, reported)) {
+                        setStatus("Override on at " + label + ". This app won't turn the heater off for an "
+                                + "empty mug. It stays until you tap Heater off or disconnect. The mug itself "
+                                + "may still refuse to heat without liquid.");
+                    } else {
+                        state.forceHeat = false;
+                        setStatus("Override not started. The mug didn't confirm " + label + describe(reported));
+                    }
+                    readLiquid(c);
+                    readCurrent(c);
+                }));
+    }
+
     /** Writes a zero target and reads it back. {@code reason} is appended to the status text. */
     void heaterOff(String reason) {
         final MugConnection c = connection;
@@ -379,6 +432,7 @@ public final class EmberService extends Service implements MugConnection.Listene
             return;
         }
         offInFlight = true;
+        state.forceHeat = false;
         setStatus("Turning the heater off…");
         c.write(EmberProtocol.TARGET_TEMP, EmberProtocol.heaterOff(), ok ->
                 c.read(EmberProtocol.TARGET_TEMP, (readOk, value) -> {
@@ -586,6 +640,8 @@ public final class EmberService extends Service implements MugConnection.Listene
         queuedLed = null;
         state.liquidReadAtMs = 0;
         state.pushEventsActive = false;
+        // The override never outlives the connection it was started on.
+        state.forceHeat = false;
     }
 
     private void resetReadings() {
@@ -867,6 +923,7 @@ public final class EmberService extends Service implements MugConnection.Listene
         }
         String address = device.getAddress();
         if (target == 0) {
+            state.forceHeat = false;
             shutdowns.clear(address);
         } else if (ShutdownPolicy.shouldArm(settings.flag(AppSettings.OFF_ON_DISCONNECT), target)) {
             shutdowns.arm(address, System.currentTimeMillis());
@@ -884,11 +941,12 @@ public final class EmberService extends Service implements MugConnection.Listene
 
         if (liquid == LiquidState.EMPTY) {
             notifiedTargetFor = null;
-            boolean turnOff = heating && settings.flag(AppSettings.OFF_WHEN_EMPTY);
+            boolean turnOff = heating && !state.forceHeat && settings.flag(AppSettings.OFF_WHEN_EMPTY);
             if (hadFreshReading && previous.hasLiquid() && settings.flag(AppSettings.NOTIFY_EMPTY)) {
-                Notifications.alert(this, Notifications.ID_LIQUID, "Your mug is empty",
-                        turnOff ? "Turning the heater off." : "Refill it to keep enjoying a warm drink.",
-                        null);
+                String emptyText = turnOff ? "Turning the heater off."
+                        : heating && state.forceHeat ? "The override is on, so the heater was left on."
+                        : "Refill it to keep enjoying a warm drink.";
+                Notifications.alert(this, Notifications.ID_LIQUID, "Your mug is empty", emptyText, null);
             }
             if (turnOff) {
                 heaterOff(" because the mug is empty");
@@ -958,6 +1016,7 @@ public final class EmberService extends Service implements MugConnection.Listene
         state.link = MugState.Link.STOPPED;
         state.liquidReadAtMs = 0;
         state.pushEventsActive = false;
+        state.forceHeat = false;
         MugState snapshot = state.copy();
         for (StateListener listener : new ArrayList<>(listeners)) {
             listener.onMugState(snapshot);

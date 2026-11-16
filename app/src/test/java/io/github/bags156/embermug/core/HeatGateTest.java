@@ -6,6 +6,14 @@ import org.junit.Test;
 
 public class HeatGateTest {
 
+    @Test
+    public void forcedHeatIgnoresLiquidButNotTheConnection() {
+        assertEquals(HeatGate.Decision.ALLOWED, HeatGate.checkForced(true, false));
+        assertEquals(HeatGate.Decision.NOT_READY, HeatGate.checkForced(false, false));
+        assertEquals(HeatGate.Decision.NOT_READY, HeatGate.checkForced(false, true));
+        assertEquals(HeatGate.Decision.SHUTDOWN_PENDING, HeatGate.checkForced(true, true));
+    }
+
     private static final long NOW = 1_000_000L;
 
     private static HeatGate.Decision check(boolean ready, boolean pending, LiquidState state, long readAt) {
